@@ -7,10 +7,12 @@ import argparse
 from content_gen import generate_blog_and_newsletters
 from crm_integration import sync_contacts_and_campaign
 from performance import simulate_performance, generate_ai_insights
+from log import get_logger
+
+# Get logger for API client messages
+logger = get_logger()
 
 def run_pipeline(topic):
-    """Run the complete marketing pipeline"""
-    
     print("\n" + "="*50)
     print(f"Starting NovaMind Pipeline: {topic}")
     print("="*50 + "\n")
@@ -18,13 +20,13 @@ def run_pipeline(topic):
     # Step 1: Generate content
     print("STEP 1: Generating AI Content...")
     content = generate_blog_and_newsletters(topic)
-    print(f"   ✓ Blog post created ({len(content['blog_post'])} chars)")
-    print(f"   ✓ {len(content['newsletters'])} newsletter variants generated\n")
+    print(f"Blog post created ({len(content['blog_post'])} chars)")
+    print(f"{len(content['newsletters'])} newsletter variants generated\n")
     
     # Step 2: Sync to CRM
     print("STEP 2: Syncing to HubSpot CRM...")
     campaign_results = sync_contacts_and_campaign(topic, content['newsletters'])
-    print(f"   ✓ Campaigns logged for {len(campaign_results)} personas\n")
+    logger.info(f"   ✓ Campaigns logged for {len(campaign_results)} personas\n")
     
     # Step 3: Simulate performance
     print("STEP 3: Collecting Engagement Data...")

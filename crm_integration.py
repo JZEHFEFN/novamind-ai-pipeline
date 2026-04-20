@@ -1,240 +1,425 @@
 import os
 import random
 import requests
-from hubspot import HubSpot
-from hubspot.crm.contacts import SimplePublicObjectInput, ApiException
+import time
+from datetime import datetime
 from dotenv import load_dotenv
 from utils import save_json, log_campaign
+from log import get_logger
+
+API_DELAY = 0.5  # 0.5 seconds between API calls
+# Get logger for API client messages
+logger = get_logger()
+
+# Import from config files
+from config import (
+    PERSONAS,
+    get_persona_value,
+    get_persona_name,
+    get_persona_keys,
+    DEMO_CONTACTS,
+    EMAIL_TO_PERSONA,
+    get_demo_contacts_by_persona
+)
 
 load_dotenv()
 
-# Persona to list ID mapping (we'll create these lists)
-PERSONA_LISTS = {
-    'creative_director': None,  # Will be created dynamically
-    'automation_specialist': None,
-    'freelance_designer': None
+# Headers for API calls
+HEADERS = {
+    "Authorization": f"Bearer {os.getenv('HUBSPOT_ACCESS_TOKEN')}",
+    "Content-Type": "application/json"
 }
 
-# Mock contact data (for testing without real API)
-MOCK_CONTACTS = {
-    'creative_director': [
-        {'email': 'sarah@creativeagency.com', 'firstname': 'Sarah', 'lastname': 'Chen'},
-        {'email': 'marcus@designstudio.com', 'firstname': 'Marcus', 'lastname': 'Rodriguez'},
-        {'email': 'emily@brandlab.com', 'firstname': 'Emily', 'lastname': 'Wong'}
-    ],
-    'automation_specialist': [
-        {'email': 'alex@workflowpro.com', 'firstname': 'Alex', 'lastname': 'Kim'},
-        {'email': 'jordan@automate.io', 'firstname': 'Jordan', 'lastname': 'Patel'},
-        {'email': 'taylor@opsmaster.com', 'firstname': 'Taylor', 'lastname': 'Nguyen'}
-    ],
-    'freelance_designer': [
-        {'email': 'chloe@creativemuse.com', 'firstname': 'Chloe', 'lastname': 'Davis'},
-        {'email': 'ryan@designfreelance.com', 'firstname': 'Ryan', 'lastname': 'Martinez'},
-        {'email': 'zoe@artspace.com', 'firstname': 'Zoe', 'lastname': 'Thompson'}
-    ]
-}
+# ============================================
+# CONTACT CREATION WITH PERSONA
+# ============================================
 
-# Initialize HubSpot client
-try:
-    hubspot_client = HubSpot(access_token=os.getenv('HUBSPOT_ACCESS_TOKEN'))
-    print("HubSpot client initialized")
-except Exception as e:
-    print(f"HubSpot init failed: {e}")
-    print("Will use mock mode instead")
-    hubspot_client = None
-
-def create_contact_list(list_name, persona):
-    """Create a contact list in HubSpot for a persona"""
-    if not hubspot_client:
-        print(f"   ⚠️ WARNING: HubSpot client not available - cannot create list '{list_name}'")
-        return None
-    
+def create_contact_with_persona(contact_info):
+    #Create a new contact in HubSpot WITH persona assigned at creation time
+    time.sleep(API_DELAY)  # Add delay to avoid rate limiting
     try:
-        # Correct HubSpot Lists API v3 endpoint
-        url = "https://api.hubapi.com/crm/v3/lists/"
-        headers = {
-            "Authorization": f"Bearer {os.getenv('HUBSPOT_ACCESS_TOKEN')}",
-            "Content-Type": "application/json"
+        url = "https://api.hubapi.com/crm/v3/objects/contacts"
+        
+        properties = {
+            "email": contact_info['email'],
+            "firstname": contact_info['firstname'],
+            "lastname": contact_info['lastname'],
+            "hs_persona": contact_info['persona']
         }
         
-        # Correct payload format for HubSpot v3 lists
-        payload = {
-            "name": list_name,
-            "objectType": "CONTACT",
-            "processingType": "MANUAL",
-            "customProperties": {}
-        }
+        payload = {"properties": properties}
         
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=HEADERS)
         
-        if response.status_code == 201:
-            list_id = response.json().get('id')
-            print(f"Created list '{list_name}' (ID: {list_id})")
-            return list_id
+        if response.status_code in [200, 201]:
+            contact_id = response.json().get('id')
+            persona_name = get_persona_name(contact_info['persona'])
+            logger.info(f"Created: {contact_info['firstname']} {contact_info['lastname']} (Persona: {persona_name})")
+            return contact_id
         else:
-            print(f"Failed to create list: HTTP {response.status_code}")
-            # Don't show HTML error, just a clean message
-            if response.status_code == 401:
-                print(f"Authentication failed - check your HubSpot token")
-            elif response.status_code == 403:
-                print(f"Permission denied - check your app scopes")
+            logger.info(f"Failed: {contact_info['email']} - HTTP {response.status_code}")
             return None
             
     except Exception as e:
-        print(f"Error creating list: {e}")
+        logger.info(f"Error: {e}")
         return None
 
-def add_contact_to_list(contact_id, list_id):
-    """Add a contact to a specific list"""
-    if not hubspot_client or not list_id:
-        return False
-    
+# ============================================
+# CAMPAIGN LOGGING TO CONTACT NOTES
+# ============================================
+
+def add_campaign_note_to_contact(contact_id, blog_title, campaign_id, persona, send_date, newsletter_id, newsletter_preview=""):
+    """
+    Add a note to a specific contact's timeline in HubSpot
+    Uses associations to link the note to the contact
+    """
     try:
-        # Correct endpoint for adding contacts to list
-        url = f"https://api.hubapi.com/crm/v3/lists/{list_id}/memberships/add"
-        headers = {
-            "Authorization": f"Bearer {os.getenv('HUBSPOT_ACCESS_TOKEN')}",
-            "Content-Type": "application/json"
-        }
+        url = "https://api.hubapi.com/crm/v3/objects/notes"
         
-        # Contact IDs must be integers
+        # Convert send_date to milliseconds timestamp
+        from datetime import datetime
+        if isinstance(send_date, str):
+            if 'T' in send_date:
+                dt = datetime.fromisoformat(send_date.replace('Z', '+00:00'))
+            else:
+                dt = datetime.now()
+        else:
+            dt = send_date
+        
+        timestamp_ms = int(dt.timestamp() * 1000)
+        
+        # Format the note body with proper line breaks
+        note_body = f"""CAMPAIGN RECEIVED<br>
+            Date: {dt.strftime('%Y-%m-%d %H:%M:%S')}<br>
+            Blog Title: {blog_title}<br>
+            Campaign ID: {campaign_id}<br>
+            Newsletter ID: {newsletter_id}<br>
+            Persona Segment: {persona}<br>
+            Generated by NovaMind AI Marketing Pipeline"""
+        
+        # Build payload with associations
         payload = {
-            "recordIds": [int(contact_id)]  # Changed from "contactIds" to "recordIds"
+            "properties": {
+                "hs_timestamp": timestamp_ms,
+                "hs_note_body": note_body
+            },
+            "associations": [
+                {
+                    "to": {
+                        "id": str(contact_id)
+                    },
+                    "types": [
+                        {
+                            "associationCategory": "HUBSPOT_DEFINED",
+                            "associationTypeId": 202
+                        }
+                    ]
+                }
+            ]
         }
         
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=HEADERS)
+        
+        if response.status_code in [200, 201]:
+            note_id = response.json().get('id')
+            return True, note_id
+        else:
+            logger.info(f"Failed to add note: HTTP {response.status_code}")
+            return False, None
+            
+    except Exception as e:
+        logger.info(f"Error adding note: {e}")
+        return False, None
+
+
+def log_campaign_to_all_contacts(contact_ids, blog_title, campaign_id, persona, send_date, newsletter_id, newsletter_content=""):
+    """
+    Log campaign to every contact in the contact list
+    Creates a note linked to each contact's timeline
+    """
+    if not contact_ids:
+        return 0
+    
+    success_count = 0
+    
+    for contact_id in contact_ids:
+        if isinstance(contact_id, str) and contact_id.startswith('mock'):
+            continue
+        
+        contact_id_str = str(contact_id)
+        
+        success, _ = add_campaign_note_to_contact(
+            contact_id=contact_id_str,
+            blog_title=blog_title,
+            campaign_id=campaign_id,
+            persona=persona,
+            send_date=send_date,
+            newsletter_id=newsletter_id,
+            newsletter_preview=newsletter_content[:300] if newsletter_content else ""
+        )
+        
+        if success:
+            success_count += 1
+    
+    if success_count > 0:
+        logger.info(f"Added campaign notes to {success_count} contact(s) in HubSpot")
+    
+    return success_count
+
+# ============================================
+# CONTACT MANAGEMENT
+# ============================================
+
+def get_all_contacts(limit=100):
+    #Get all contacts from HubSpot including hs_persona
+    try:
+        url = f"https://api.hubapi.com/crm/v3/objects/contacts?limit={min(limit, 100)}&properties=email,firstname,lastname,hs_persona"
+        
+        response = requests.get(url, headers=HEADERS)
         
         if response.status_code == 200:
-            print(f"Added contact to list")
-            return True
-        else:
-            print(f"Failed to add to list: HTTP {response.status_code}")
-            return False
-        
-    except Exception as e:
-        print(f"Error adding to list: {e}")
-        return False
-
-def create_or_update_contact(contact_info, persona):
-    """Create or update a contact in HubSpot and add to persona list"""
-    contact_id = None
-    
-    if hubspot_client:
-        try:
-            properties = {
-                'email': contact_info['email'],
-                'firstname': contact_info['firstname'],
-                'lastname': contact_info['lastname'],
-                'hs_lead_status': 'NEW'
-            }
-            contact_input = SimplePublicObjectInput(properties=properties)
-            contact = hubspot_client.crm.contacts.basic_api.create(
-                simple_public_object_input_for_create=contact_input
-            )
-            contact_id = contact.id
-            print(f"Created contact: {contact_info['firstname']} {contact_info['lastname']} (ID: {contact_id})")
+            data = response.json()
+            contacts = []
             
-        except ApiException as e:
-            if "already exists" in str(e) or "409" in str(e):
-                # Contact exists, search for it
-                try:
-                    search_response = hubspot_client.crm.contacts.search_api.do_search(
-                        public_object_search_request={
-                            "filterGroups": [{
-                                "filters": [{
-                                    "propertyName": "email",
-                                    "operator": "EQ",
-                                    "value": contact_info['email']
-                                }]
-                            }]
-                        }
-                    )
-                    if search_response.results:
-                        contact_id = search_response.results[0].id
-                        print(f"Contact exists: {contact_info['email']} (ID: {contact_id})")
-                except Exception as search_error:
-                    print(f"Search error: {search_error}")
-                    contact_id = f"mock_{contact_info['email']}"
-            else:
-                print(f"HubSpot error: {e}")
-                contact_id = f"mock_{contact_info['email']}"
-    else:
-        # Mock mode
-        contact_id = f"mock_{contact_info['email']}"
-        print(f"   Mock: Created contact {contact_info['email']} for {persona}")
+            for result in data.get('results', []):
+                props = result.get('properties', {})
+                persona_value = props.get('hs_persona')
+                
+                # Find persona name using config
+                persona_name = "Not Set"
+                for p_key, p_config in PERSONAS.items():
+                    if p_config['value'] == persona_value:
+                        persona_name = p_config['name']
+                        break
+                
+                contacts.append({
+                    'id': result.get('id'),
+                    'email': props.get('email'),
+                    'firstname': props.get('firstname', ''),
+                    'lastname': props.get('lastname', ''),
+                    'persona_value': persona_value,
+                    'persona_name': persona_name,
+                    'has_persona': persona_value is not None and persona_value != ""
+                })
+            
+            logger.info(f"Fetched {len(contacts)} contacts")
+            return contacts
+        else:
+            return []
+            
+    except Exception as e:
+        logger.info(f"Error: {e}")
+        return []
+
+def ensure_contacts_exist():
+    #Create demo contacts if they don't exist
+    logger.info("\n" + "="*70)
+    logger.info("CREATING DEMO CONTACTS WITH PERSONAS")
+    logger.info("="*70)
     
-    return contact_id
+    existing_contacts = get_all_contacts(limit=100)
+    existing_emails = set(c.get('email') for c in existing_contacts if c.get('email'))
+    
+    created_count = 0
+    
+    for contact in DEMO_CONTACTS:
+        if contact['email'] not in existing_emails:
+            contact_id = create_contact_with_persona(contact)
+            if contact_id:
+                created_count += 1
+        else:
+            logger.info(f"Already exists: {contact['email']}")
+    
+    if created_count > 0:
+        logger.info(f"\nCreated {created_count} new contacts")
+    else:
+        logger.info(f"\nAll demo contacts already exist")
+    
+    return created_count
+
+def print_contact_summary():
+    #Print summary of all contacts with their personas
+    contacts = get_all_contacts(limit=50)
+    
+    logger.info("\n" + "="*70)
+    logger.info("CONTACTS IN HUBSPOT")
+    logger.info("="*70)
+    
+    if not contacts:
+        logger.info("   No contacts found")
+        return
+    
+    logger.info(f"\n{'Name':<25} {'Email':<30} {'Persona':<20}")
+    logger.info("-" * 75)
+    
+    for contact in contacts:
+        name = f"{contact.get('firstname', '')} {contact.get('lastname', '')}".strip() or "Unknown"
+        email = contact.get('email', 'No email')[:28]
+        
+        if contact.get('has_persona'):
+            persona_display = f"{contact.get('persona_name', '')}"
+        else:
+            persona_display = "Not Set"
+        
+        logger.info(f"{name:<25} {email:<30} {persona_display:<20}")
+    
+    with_persona = sum(1 for c in contacts if c.get('has_persona'))
+    without_persona = len(contacts) - with_persona
+    
+    logger.info("\n" + "-" * 75)
+    logger.info(f"Summary: {with_persona} have personas, {without_persona} need assignment")
+
+def get_persona_distribution():
+    #Get distribution of personas
+    distribution = {persona: 0 for persona in get_persona_keys()}
+    distribution['unassigned'] = 0
+    
+    contacts = get_all_contacts(limit=200)
+    
+    for contact in contacts:
+        if contact.get('has_persona'):
+            persona_value = contact.get('persona_value')
+            for p_key in get_persona_keys():
+                if PERSONAS[p_key]['value'] == persona_value:
+                    distribution[p_key] += 1
+                    break
+        else:
+            distribution['unassigned'] += 1
+    
+    return distribution
+
+# ============================================
+# MAIN SYNC FUNCTION
+# ============================================
 
 def sync_contacts_and_campaign(blog_title, newsletters):
-    """Sync contacts to CRM, add to lists, and log campaign"""
+    """
+    Main sync function:
+    1. Create contacts with personas
+    2. Segment by persona
+    3. Log campaign to JSON file
+    4. Log campaign to each contact's note in HubSpot
+    """
     campaign_results = {}
     
-    # Check if HubSpot is available
-    if not hubspot_client:
-        print("\nWARNING: HubSpot client not initialized")
-        print("Continuing with mock mode - contacts will not be created in HubSpot")
-        print("Add HUBSPOT_ACCESS_TOKEN to .env to enable real CRM integration\n")
+    if not os.getenv('HUBSPOT_ACCESS_TOKEN'):
+        logger.info("\nNo HubSpot token. Using mock mode.")
+        return mock_sync(blog_title, newsletters)
     
-    # Create lists for each persona (only if HubSpot available)
-    print("\nSetting up persona lists...")
-    for persona in PERSONA_LISTS.keys():
-        list_name = f"NovaMind - {persona.replace('_', ' ').title()}"
+    # Create contacts with personas
+    ensure_contacts_exist()
+    
+    # Show all contacts
+    print_contact_summary()
+    
+    # Show persona distribution
+    logger.info("\n" + "="*70)
+    logger.info("PERSONA DISTRIBUTION")
+    logger.info("="*70)
+    
+    distribution = get_persona_distribution()
+    for persona_key in get_persona_keys():
+        logger.info(f"{PERSONAS[persona_key]['name']}: {distribution.get(persona_key, 0)} contacts")
+    logger.info(f"Unassigned: {distribution.get('unassigned', 0)} contacts")
+    
+    # Get all contacts for segmentation
+    all_contacts = get_all_contacts(limit=200)
+    
+    # Prepare campaigns by persona
+    logger.info("\n" + "="*70)
+    logger.info("PREPARING PERSONA-SPECIFIC CAMPAIGNS")
+    logger.info("="*70)
+    
+    send_date = datetime.now().isoformat()
+    
+    for persona_key in get_persona_keys():
+        persona_config = PERSONAS[persona_key]
+        logger.info(f"\n   {persona_config['name']}:")
         
-        if hubspot_client:
-            list_id = create_contact_list(list_name, persona)
+        # Get contacts with this persona
+        persona_contacts = [c for c in all_contacts if c.get('persona_value') == persona_config['value']]
+        contact_ids = [c['id'] for c in persona_contacts]
+        
+        # Create campaign ID and newsletter ID
+        campaign_id = f"campaign_{blog_title[:20].replace(' ', '_')}_{persona_key}_{random.randint(1000,9999)}"
+        newsletter_id = f"newsletter_{persona_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        if contact_ids:
+            logger.info(f"Found {len(contact_ids)} contacts with this persona")
+            for contact in persona_contacts[:3]:
+                name = f"{contact.get('firstname', 'Unknown')}"
+                logger.info(f"{name} ({contact.get('email')})")
         else:
-            print(f"Skipping list creation for '{list_name}' (no HubSpot client)")
-            list_id = None
+            logger.info(f"No contacts with this persona yet")
         
-        PERSONA_LISTS[persona] = list_id
-    
-    for persona, newsletter_content in newsletters.items():
-        print(f"\nProcessing {persona}...")
-        contact_ids = []
-        list_id = PERSONA_LISTS.get(persona)
+        # STEP 1: Log to JSON file (backup)
+        log_campaign(
+            blog_title=blog_title,
+            persona=persona_key,
+            campaign_id=campaign_id,
+            contact_ids=contact_ids,
+            log_file='campaign_log.json'
+        )
         
-        # Create/update contacts for this persona
-        for contact in MOCK_CONTACTS[persona]:
-            if hubspot_client:
-                contact_id = create_or_update_contact(contact, persona)
-                contact_ids.append(contact_id)
-                
-                # Add to persona list if list exists
-                if list_id and contact_id and not isinstance(contact_id, str):
-                    add_contact_to_list(contact_id, list_id)
-            else:
-                # Mock mode - just track what would happen
-                contact_id = f"mock_{contact['email']}"
-                contact_ids.append(contact_id)
-                print(f"   Mock: Would create contact {contact['email']} for {persona}")
+        # STEP 2: Log to each contact's timeline in HubSpot
+        newsletter_content = newsletters.get(persona_key, "")
+        note_count = log_campaign_to_all_contacts(
+            contact_ids=contact_ids,
+            blog_title=blog_title,
+            campaign_id=campaign_id,
+            persona=persona_config['name'],
+            send_date=send_date,
+            newsletter_id=newsletter_id,
+            newsletter_content=newsletter_content
+        )
         
-        # Create campaign log entry
-        campaign_id = f"campaign_{blog_title[:20].replace(' ', '_')}_{persona}_{random.randint(1000,9999)}"
-        
-        # Log to JSON
-        log_campaign(blog_title, persona, campaign_id, contact_ids, 
-                    log_file='campaign_log.json', 
-                    list_id=list_id)
-        
-        campaign_results[persona] = {
+        campaign_results[persona_key] = {
             'campaign_id': campaign_id,
+            'newsletter_id': newsletter_id,
             'contact_ids': contact_ids,
-            'list_id': list_id,
-            'newsletter_content': newsletter_content
+            'contact_count': len(contact_ids),
+            'notes_added': note_count,
+            'send_date': send_date,
+            'blog_title': blog_title
         }
         
-        if hubspot_client and list_id:
-            print(f"Synced {len(contact_ids)} contacts to list for {persona}")
-        else:
-            print(f"Mock: Would sync {len(contact_ids)} contacts for {persona}")
+        logger.info(f"Campaign logged: {campaign_id}")
+        logger.info(f"Newsletter ID: {newsletter_id}")
+        logger.info(f"Send Date: {send_date[:19]}")
+        logger.info(f"Contacts: {len(contact_ids)}")
+    
+    save_json(campaign_results, 'latest_campaign.json')
+    return campaign_results
+
+def mock_sync(blog_title, newsletters):
+    #Mock mode fallback
+    logger.info("\nMOCK MODE")
+    campaign_results = {}
+    
+    send_date = datetime.now().isoformat()
+    
+    for persona_key in get_persona_keys():
+        mock_contact_ids = [f"mock_{i}" for i in range(1, 4)]
+        campaign_id = f"campaign_mock_{persona_key}_{random.randint(1000,9999)}"
+        
+        log_campaign(blog_title, persona_key, campaign_id, mock_contact_ids, log_file='campaign_log.json')
+        
+        campaign_results[persona_key] = {
+            'campaign_id': campaign_id,
+            'contact_ids': mock_contact_ids,
+            'contact_count': len(mock_contact_ids),
+            'send_date': send_date,
+            'blog_title': blog_title
+        }
+        
+        print(f"Mock: {len(mock_contact_ids)} {PERSONAS[persona_key]['name']} contacts")
     
     save_json(campaign_results, 'latest_campaign.json')
     return campaign_results
 
 if __name__ == "__main__":
-    # Test mode
     test_newsletters = {
-        'creative_director': 'Test newsletter for creative directors',
+        'creative_director': 'Test for creative directors',
         'automation_specialist': 'Test for automation specialists',
         'freelance_designer': 'Test for freelancers'
     }

@@ -1,5 +1,9 @@
 import json
 from datetime import datetime
+from log import get_logger
+
+# Get logger for API client messages
+logger = get_logger()
 
 def save_json(data, filename):
     # Save data to JSON file
@@ -15,7 +19,7 @@ def load_json(filename):
         return None
 
 def log_campaign(blog_title, persona, campaign_id, contact_ids, log_file='campaign_log.json', list_id=None):
-    """Log campaign to specified JSON file with optional list_id"""
+    #Log campaign to specified JSON file with optional list_id
     log = load_json(log_file) or []
     
     entry = {
@@ -31,7 +35,7 @@ def log_campaign(blog_title, persona, campaign_id, contact_ids, log_file='campai
     
     log.append(entry)
     save_json(log, log_file)
-    print(f"Logged to {log_file}")
+    logger.info(f"Logged to {log_file}")
 
 def load_prompts(filepath='prompts/prompts.txt'):
     """
@@ -69,13 +73,13 @@ def load_prompts(filepath='prompts/prompts.txt'):
             prompts[current_key] = '\n'.join(current_content).strip()
             
     except FileNotFoundError:
-        print(f"prompts.txt not found. Using default prompts.")
+        logger.info(f"prompts.txt not found. Using default prompts.")
         return get_default_prompts()
     
     return prompts
 
 def get_default_prompts():
-    """Fallback prompts in case prompts.txt is missing"""
+    #Fallback prompts in case prompts.txt is missing
     return {
         'BLOG_GENERATION': "Write a 500-word blog post about {topic} for an AI startup...",
         'NEWSLETTER_CREATIVE_DIRECTOR': "Rewrite this blog as a 150-word newsletter for a Creative Director...",
@@ -84,7 +88,7 @@ def get_default_prompts():
     }
 
 def validate_prompts(prompts):
-    """Check that all required prompts exist"""
+    #Check that all required prompts exist
     required = [
         'BLOG_GENERATION',
         'NEWSLETTER_CREATIVE_DIRECTOR',
@@ -94,6 +98,6 @@ def validate_prompts(prompts):
     
     missing = [r for r in required if r not in prompts]
     if missing:
-        print(f"Missing prompts: {missing}")
+        logger.info(f"Missing prompts: {missing}")
         return False
     return True

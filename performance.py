@@ -10,7 +10,7 @@ load_dotenv()
 client = Groq(api_key=os.getenv('GROQ_API_KEY'))
 
 def simulate_performance(campaign_results):
-    """Simulate engagement metrics for each campaign"""
+    #Simulate engagement metrics for each campaign
     performance_data = {}
     
     for persona, campaign_info in campaign_results.items():
@@ -45,7 +45,7 @@ def simulate_performance(campaign_results):
     return performance_data
 
 def generate_ai_insights(performance_data):
-    """Use AI to analyze performance and provide recommendations"""
+    #Use AI to analyze performance and provide recommendations
     
     # Create a readable summary for the AI
     summary = "Campaign Performance Summary:\n"

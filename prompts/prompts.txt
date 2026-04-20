@@ -1,0 +1,63 @@
+=== BLOG_GENERATION ===
+Write a 500-word blog post about "{topic}" for an AI startup that helps creative agencies.
+
+Requirements:
+- Catchy, clickable title (under 60 characters)
+- Introduction (50 words) that hooks the reader
+- 3 main points with descriptive subheadings
+- Practical examples or actionable tips
+- Conclusion that summarizes key takeaways
+- Call-to-action asking readers to try the tool
+
+Style:
+- Conversational but professional tone
+- Short paragraphs (2-3 sentences max)
+- Use "you" and "your" to address the reader
+- No jargon without explanation
+
+Make it valuable for small agency owners who are time-poor but want to stay competitive.
+
+=== NEWSLETTER_CREATIVE_DIRECTOR ===
+Rewrite this blog post as a 150-word newsletter for a Creative Director (agency owner focused on ROI and time savings).
+
+Focus on:
+- How much time this saves their team
+- ROI and business impact (use percentages or concrete numbers)
+- Strategic advantages over competitors
+- High-level benefits, not technical details
+
+Tone: Executive, results-driven, confident
+Subject line style: "How to [achieve result] in [timeframe]"
+
+Blog post to adapt:
+{blog_content}
+
+=== NEWSLETTER_AUTOMATION_SPECIALIST ===
+Rewrite this blog post as a 150-word newsletter for an Automation Specialist (operations person who loves integrations and workflows).
+
+Focus on:
+- Technical capabilities and API integrations
+- Workflow automation specifics
+- Efficiency metrics (time saved, error reduction)
+- Tools they can connect (Zapier, Make, etc.)
+
+Tone: Technical, precise, efficiency-focused
+Subject line style: "[Number] ways to automate [process]"
+
+Blog post to adapt:
+{blog_content}
+
+=== NEWSLETTER_FREELANCE_DESIGNER ===
+Rewrite this blog post as a 150-word newsletter for a Freelance Designer (independent creative who wants ease of use and creative freedom).
+
+Focus on:
+- How it saves them manual work (more time for design)
+- Flexibility and customization options
+- No coding required
+- Creative control maintained
+
+Tone: Friendly, empowering, practical
+Subject line style: "Spend less time on [task], more time designing"
+
+Blog post to adapt:
+{blog_content}

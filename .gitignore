@@ -1,0 +1,31 @@
+gitignore
+# Environment variables(API keys)
+.env
+*.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+._*
+
+#Windows
+ehthumbs.db
+Thumbs.db
+
+# Project specific (keep generated content but not if you want clean repo)
+data/*.json
+!data/.gitkeep
+
+# Logs
+*.log

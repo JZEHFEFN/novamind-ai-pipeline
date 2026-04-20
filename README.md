@@ -14,7 +14,7 @@
 
 ---
 
-## Overview
+# Overview
 
 This pipeline automates the entire marketing content workflow:
 
@@ -26,7 +26,7 @@ The system supports dual AI models (OpenAI primary, Groq fallback) with automati
 
 ---
 
-## Features
+# Features
 
 | Feature | Description |
 |---------|-------------|
@@ -40,7 +40,7 @@ The system supports dual AI models (OpenAI primary, Groq fallback) with automati
 
 ---
 
-## Prerequisites
+# Prerequisites
 
 - **Python 3.10+**
 - **OpenAI API Key** (primary) - [Get one here](https://platform.openai.com/api-keys)
@@ -49,7 +49,7 @@ The system supports dual AI models (OpenAI primary, Groq fallback) with automati
 
 ---
 
-## Installation
+# Installation
 
 ```bash
 # Clone the repository
@@ -84,7 +84,7 @@ python-dotenv==1.0.0
 requests==2.31.0
 EOF
 ```
-## Configuration
+# Configuration
 
 Personas: Edit config/personas.py to modify personas:
 Prompts: Edit prompts/prompts.txt to change AI prompts.
@@ -172,7 +172,7 @@ Add the HubSpot access token:
 HUBSPOT_ACCESS_TOKEN=pat-na1-your-token-here
 ```
 ---
-## Usage
+# Usage
 
 ```bash
 python3 main.py --topic "Your topic here"

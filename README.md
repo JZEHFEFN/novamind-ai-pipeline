@@ -9,12 +9,8 @@
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Configuration](#configuration)
-- [Project Structure](#project-structure)
-- [Usage](#usage)
-- [Output](#output)
 - [HubSpot Setup](#hubspot-setup)
-- [Troubleshooting](#troubleshooting)
-- [Assumptions](#assumptions)
+- [Usage](#usage)
 
 ---
 
@@ -57,7 +53,7 @@ The system supports dual AI models (OpenAI primary, Groq fallback) with automati
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/novamind-pipeline.git
+git clone https://github.com/JZEHFEFN/novamind-ai-pipeline
 cd novamind-pipeline
 
 # Create virtual environment
@@ -87,6 +83,99 @@ hubspot-api-client==8.0.0
 python-dotenv==1.0.0
 requests==2.31.0
 EOF
+```
+## Configuration
 
-# Run the pipeline
+Personas: Edit config/personas.py to modify personas:
+Prompts: Edit prompts/prompts.txt to change AI prompts.
+Demo Contacts: Edit config/mock_contacts.py to change demo contacts.
+
+---
+
+# HubSpot Setup
+
+## Step 1: Create a HubSpot Developer Account
+
+1. Go to [developers.hubspot.com](https://developers.hubspot.com/)
+2. Click **"Get Started"** in the top right corner
+3. Select **"Create a developer account"**
+4. Fill in your email address and create a password
+5. Verify your email address via the link sent to your inbox
+6. Log in to your new developer account
+
+> **Note:** Developer accounts are completely free and include API access for testing and development.
+
+---
+
+## Step 2: Create a Private App
+
+1. In your developer account dashboard, navigate to **Apps** in the left sidebar
+2. Click the **"Create app"** button
+3. You'll see a warning about "Legacy App" - this is fine for our purposes. Click **"Continue"**
+4. Select **"Private"** app type (for one account)
+5. Fill in the app details:
+
+| Field | Value |
+|-------|-------|
+| **App name** | `NovaMind AI Marketing Pipeline(Or anything you desire)` |
+| **Description** | `AI-powered content generation and distribution pipeline(Or anything you desire)` |
+| **Logo** | (Optional - skip) |
+
+---
+
+## Step 3: Configure Required Scopes
+
+Under the **Scopes** section, you need to add the following permissions:
+
+### Required Scopes
+
+| Scope | Permission | Why Needed |
+|-------|------------|------------|
+| `crm.objects.contacts.read` | Read contacts | To fetch existing contacts |
+| `crm.objects.contacts.write` | Create/update contacts | To create and update contacts |
+| `crm.objects.contacts.sensitive.read` | Read sensitive contact data | To access email addresses |
+| `crm.schemas.contacts.read` | Read contact properties | To check contact schema |
+| `crm.objects.notes.read` | Read notes | To verify campaign logging |
+| `crm.objects.notes.write` | Create notes | To log campaigns to contact timelines |
+
+### How to Add Scopes
+
+1. Click **"Add scopes"**
+2. Search for each scope in the search bar
+3. Check the box next to the scope
+4. For scopes with multiple levels, select **"Read & Write"** where available
+---
+
+## Step 4: Generate Access Token
+
+1. Scroll to the bottom of the page and click **"Create app"**
+2. On the app dashboard, locate the **"Access token"** section
+3. Click **"Generate token"**
+4. A popup will appear with your access token
+
+> ⚠️ **IMPORTANT**: Copy the token immediately and save it somewhere secure. You will only see it once!
+
+The token will look like: pat-na1-xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+
+---
+
+## Step 5: Add Token to Your Project
+
+1. Open your `.env` file in the project root:
+
+```bash
+nano .env
+```
+Add the HubSpot access token:
+```bash
+HUBSPOT_ACCESS_TOKEN=pat-na1-your-token-here
+```
+---
+## Usage
+
+```bash
 python3 main.py --topic "Your topic here"
+```
+
+---
